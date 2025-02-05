@@ -1,0 +1,103 @@
+# Python byte-compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Notebooks
+examples/
+deprecated/
+
+# Data & outputs
+data/
+docs/
+temp/
+datasets/
+tests/
+# C extensions
+*.so
+
+# Build, packaging, and distribution
+.Python
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+.installed.cfg
+wheels/
+share/python-wheels/
+MANIFEST
+
+# PyInstaller
+*.spec
+*.manifest
+
+# Logs & reports
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+htmlcov/
+.coverage*
+.coverage
+*.cover
+*.py,cover
+.coverage.*
+nosetests.xml
+coverage.xml
+
+# Testing & caching
+.tox/
+.nox/
+.hypothesis/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Django & Flask
+local_settings.py
+db.sqlite3*
+instance/
+.webassets-cache
+
+# Scrapy
+.scrapy
+
+# Documentation
+docs/_build/
+mkdocs.yml
+/site
+
+# Virtual environments
+.env*
+.venv*
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+venv-test
+
+# Jupyter & IPython
+.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+
+# IDEs & editor-specific files
+.vscode/
+.spyderproject
+.spyproject
+.ropeproject
+
+# Miscellaneous
+celerybeat-schedule
+celerybeat.pid
+*.sage.py
+cython_debug/
+.pdm.toml
+
+# Ignore all hidden files in root (except .gitignore)
+.python-version
+
