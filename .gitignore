@@ -100,4 +100,4 @@ cython_debug/
 
 # Ignore all hidden files in root (except .gitignore)
 .python-version
-
+.DS_Store
