@@ -77,11 +77,6 @@ It is recommended to use a virtual environment (e.g., conda, venv) to isolate de
 
 # Example: Building a Temporal Knowledge Graph (TKG) with ATOM from LLMS History
 
-This example demonstrates how to use ATOM to extract factoids from a dataset, build a dynamic Temporal Knowledge Graph (TKG) across different observation timestamps, and finally visualize the graph using Neo4j.
-
----
-# Example: Building a Temporal Knowledge Graph (TKG) with ATOM from LLMS History
-
 In this example, we demonstrate how to use ATOM to extract factoids from a dataset, build a dynamic Temporal Knowledge Graph (TKG) across different observation timestamps, and finally visualize the graph using Neo4j.
 
 The process involves:
@@ -95,7 +90,6 @@ Below is the derived example code:
 ---
 
 ```python
-# %% [code]
 import pandas as pd
 import asyncio
 import ast
