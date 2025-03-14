@@ -38,7 +38,7 @@ class Matcher:
             if e1 in entities2:
                 # The e1 object matches exactly an entity in entities2 
                 # (same name+label => __eq__)
-                print(f"[INFO] Exact match for Entity: {e1}")
+                print(f"[INFO] Exact match for Entity: {e1.name}")
                 matched_entities1[i] = e1  # or unify onto the actual object in entities2 if desired
             else:
                 to_match.append((i, e1))
@@ -75,7 +75,7 @@ class Matcher:
 
                 if score >= threshold:
                     best_match_e2 = unmatched_entities2[col_idx]
-                    print(f"[INFO] Embedding match: {e1_obj} --> {best_match_e2} (score={score:.2f})")
+                    print(f"[INFO] Wohoo! Entity was matched --- [{e1_obj.name}:{e1_obj.label}] --merged --> [{best_match_e2.name}:{best_match_e2.label}] (score={score:.2f})")
                     # Fill matched_entities1 at the same index as e1
                     #
                     # If you prefer to unify onto the object from entities2 (so references
@@ -143,11 +143,13 @@ class Matcher:
             if rel1 in rels2:
                 kg = KnowledgeGraph(relationships=rels2)
                 rel2 = kg.get_relationship(rel1)
-                if rel1.properties.timestamps:
-                    rel2.add_timestamp(rel1.properties.timestamps)
+                #if rel1.properties.timestamps:
+                rel2.combine_timestamps(timestamps=rel1.properties.timestamps, temporal_aspect="timestamps")
+                rel2.combine_timestamps(timestamps=rel1.properties.t_valid, temporal_aspect="t_valid")
+                rel2.combine_timestamps(timestamps=rel1.properties.t_invalid, temporal_aspect="t_invalid")
 
         kg = KnowledgeGraph(relationships=rels1+rels2)
-        kg.remove_duplicates_relationships(include_timestamps=True)
+        kg.remove_duplicates_relationships()
         return rels1, kg.relationships
 
 
@@ -175,8 +177,7 @@ class Matcher:
 
         # -- 1) Batch-match the entities --
         matched_e1, global_entities = self._batch_match_entities(e1, e2, threshold=ent_threshold)
-        print("\n the matched entities are ", [ent.name for ent in matched_e1], "\n")
-        print("\n the original entities are ", [ent.name for ent in e1], "\n")
+
         # -- 2) Batch-match the relationships --
         matched_r1, _ = self._batch_match_relationships(r1, r2, threshold=rel_threshold)
 
@@ -186,7 +187,6 @@ class Matcher:
             if old_ent is not new_ent:
                 # old_ent => new_ent
                 entity_name_mapping[old_ent] = new_ent
-        print("\n the mapping is , ", {key.name:value.name for key,value in zip(entity_name_mapping.keys(), entity_name_mapping.values())}, "\n")
         # -- 4) Update matched_r1's start/end references using the mapping --
         def update_relationships(rel_list: List["Relationship"]) -> List["Relationship"]:
             updated = []
