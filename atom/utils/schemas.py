@@ -51,6 +51,7 @@ class Entity(BaseModel):
             "The semantic category of the entity (e.g., 'Person', 'Event', 'Location', 'Methodology', 'Position'). "
             "Use 'Relationship' objects if the concept is inherently relational or verbal (e.g., 'plans'). "
             "Prefer consistent, single-word categories where possible (e.g., 'Person', not 'Person_Entity')."
+            "Do not extract Date Entities as they will be integrated in the relation."
         )
     )
     name: str = Field(
@@ -59,8 +60,12 @@ class Entity(BaseModel):
             "For example, 'Yassir', 'CEO', or 'X'. Avoid combining multiple concepts (e.g., 'CEO of X'), "
             "since linking them should be done via Relationship objects. "
             "Verbs or multi-concept phrases (e.g., 'plans an escape') typically belong in Relationship objects."
+            "Do not extract Date Entities as they will be integrated in the relation."
         )
     )
+"""     named_entity: bool = Field(
+        description="A named entity is a specific proper noun that refers to a unique person, organization, location, event or a product (e.g., ‘New York’, ‘Apple Inc.’, ‘Albert Einstein’)"
+    ) """
 
 class EntitiesExtractor(BaseModel):
     entities: List[Entity] = Field(
@@ -77,15 +82,11 @@ class Relationship(BaseModel):
     startNode: Entity = Field(
         description=(
             "The 'subject' or source entity of this relationship, which must appear in the EntitiesExtractor. "
-            "For example, if the relationship is 'holds_position', then the startNode might be a Person entity "
-            "named 'Yassir'."
         )
     )
     endNode: Entity = Field(
         description=(
             "The 'object' or target entity of this relationship, which must also appear in the EntitiesExtractor. "
-            "Using the same 'holds_position' example, the endNode might be a Position entity named 'CEO', or "
-            "an Organization entity named 'X' if the relationship is something like 'works_at'."
         )
     )
     name: str = Field(
@@ -94,7 +95,6 @@ class Relationship(BaseModel):
             "'holds_position', 'located_in'). Avoid compound verbs (e.g., 'plans_and_executes'). "
             "If the text implies negation (e.g., 'no longer CEO'), still use the affirmative form (e.g., 'is_CEO') "
             "and rely on 't_invalid' for the end date. AVOID relations names as prepositions 'of', 'in' or similar."
-            "\n**Remember**: Do not choose a relationship name that is a near copy of the entity's name (e.g., 'is_CEO' for a 'CEO' entity). "
         )
     )
     t_valid: Optional[list[str]] = Field(
@@ -226,14 +226,9 @@ class Factoid(BaseModel):
         - Eliminate redundancies by simplifying phrases (e.g., convert "the method is crucial for maintaining X" into "the method maintains X").
 
         **Example**:
-        [
-          {
-            "phrase": "In 1995, Barack Obama began teaching constitutional law at the University of Chicago Law School."
-          },
-          {
-            "phrase": "In 1996, Barack Obama was elected to the Illinois Senate."
-          }
-        ]
-
+        On June 18, 2024, Real Madrid won the Champions League final with a 2-1 victory. Following the triumph, fans of Real Madrid celebrated the Champions League victory across the city.
+        -Real Madrid won the Champions League final on June 18, 2024.
+        -The final Champions League final ended with a 2-1 victory for Real Madrid on June 18, 2024.
+        -Fans of Real Madrid celebrated the victory of Champions League final across the city on June 18, 2024.
         """
     )
