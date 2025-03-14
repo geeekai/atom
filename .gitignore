@@ -9,7 +9,6 @@ deprecated/
 
 # Data & outputs
 data/
-docs/
 temp/
 tests/
 # C extensions
