@@ -11,7 +11,6 @@ deprecated/
 data/
 docs/
 temp/
-datasets/
 tests/
 # C extensions
 *.so
@@ -101,3 +100,4 @@ cython_debug/
 # Ignore all hidden files in root (except .gitignore)
 .python-version
 .DS_Store
+/evaluation_
