@@ -24,9 +24,11 @@ class EntityProperties(BaseModelWithConfig):
     embeddings: np.ndarray = None
 
 class RelationshipProperties(BaseModelWithConfig):
-    embeddings: np.ndarray = None
-    source:      str    = ""
-    timestamps:   List[float]    = []
+    embeddings:   np.ndarray  = None
+    source:       str         = ""
+    timestamps:   List[float] = []
+    t_valid:      List[float] = []
+    t_invalid:    List[float] = []
 
 # -------------------------------------------
 # Entity model
@@ -40,7 +42,7 @@ class Entity(BaseModelWithConfig):
         """
         Normalize `label` and `name` in-place and return self.
         """
-        self.label = LABEL_PATTERN.sub("_", self.label).replace("&", "and")
+        self.label = LABEL_PATTERN.sub("_", self.label).replace("&", "and").lower()
         n = self.name.lower()
         n = NAME_PATTERN.sub(" ", n)
         self.name = n.strip()
@@ -70,14 +72,31 @@ class Relationship(BaseModelWithConfig):
         self.name = LABEL_PATTERN.sub("_", self.name).replace("&", "and")
         return self
     
-    def add_timestamp(self, timestamps:Union[List[float], List[str]]) -> None:
-        if isinstance(timestamps[0], str):
-            timestamps = [dateparser.parse(ts).timestamp() for ts in timestamps]
+    def combine_timestamps(
+        self,
+        timestamps: Union[List[float], List[str]],
+        temporal_aspect: str  # Should be one of: "timestamps", "t_valid", "t_invalid"
+    ) -> None:
+        # If timestamps is not empty, process based on element type.
+        if timestamps:
+            if isinstance(timestamps[0], str):
+                try:
+                    timestamps = [dateparser.parse(ts).timestamp() for ts in timestamps]
+                except Exception as e:
+                    raise ValueError(f"Error parsing timestamps: {e}")
+            elif not isinstance(timestamps[0], float):
+                raise ValueError("Invalid timestamp format. Please provide a list of strings or a list of floats.")
+        
+        # Extend the appropriate property with timestamps (even if the list is empty).
+        if temporal_aspect == "timestamps":
             self.properties.timestamps.extend(timestamps)
-        elif isinstance(timestamps[0], float):
-            self.properties.timestamps.extend(timestamps)
+        elif temporal_aspect == "t_valid":
+            self.properties.t_valid.extend(timestamps)
+        elif temporal_aspect == "t_invalid":
+            self.properties.t_invalid.extend(timestamps)
         else:
-            raise ValueError("Invalid timestamp format. Please provide a list of strings or a list of floats.")
+            raise ValueError("Invalid temporal aspect. Please provide either 'timestamps', 't_valid' or 't_invalid'.")
+
 
     def __eq__(self, other) -> bool:
         """Checks equality without considering timestamps."""
@@ -96,9 +115,7 @@ class Relationship(BaseModelWithConfig):
                     and set(self.properties.timestamps) == set(other.properties.timestamps))  # Timestamps must match exactly
         return False
 
-    def __hash__(self, include_timestamps:bool=False) -> int:
-        if include_timestamps:
-            return hash((self.name, self.startEntity, self.endEntity, frozenset(self.properties.timestamps)))
+    def __hash__(self) -> int:
         return hash((self.name, self.startEntity, self.endEntity))
 
     def __repr__(self) -> str:
@@ -117,12 +134,8 @@ class KnowledgeGraph(BaseModelWithConfig):
     def remove_duplicates_entities(self) -> None:
         self.entities = list(set(self.entities))
 
-    def remove_duplicates_relationships(self, include_timestamps:bool=False) -> None:
-        """Removes duplicate relationships using hashing. 
-        If `use_timestamps` is True, includes timestamps in hashing."""
-
-        unique_relationships = {rel.__hash__(include_timestamps=include_timestamps): rel for rel in self.relationships}
-        self.relationships = list(unique_relationships.values())
+    def remove_duplicates_relationships(self) -> None:
+        self.relationships = list(set(self.relationships))
 
     async def embed_entities(self,
                              embeddings_function: Callable[[List[str]], np.ndarray],
@@ -154,21 +167,21 @@ class KnowledgeGraph(BaseModelWithConfig):
     def get_entity(self, other_entity: Entity) -> Entity:
         """Finds and returns an entity using a fast dictionary lookup."""
         other_entity = other_entity.process()
-        entity_dict = {hash(e): e for e in self.entities}  # O(n) preprocessing, O(1) lookup
-        return entity_dict.get(hash(other_entity))
+        entity_dict = {e.__hash__(): e for e in self.entities}  # O(n) preprocessing, O(1) lookup
+        return entity_dict.get(other_entity.__hash__())
 
-    def get_relationship(self, other_relationship: Relationship, include_timestamps: bool = False) -> Relationship:
+    def get_relationship(self, other_relationship: Relationship) -> Relationship:
         """Finds and returns a relationship using a fast dictionary lookup."""
         other_relationship = other_relationship.process()
         relationship_dict = {
-            rel.__hash__(include_timestamps=include_timestamps): rel for rel in self.relationships
+            rel.__hash__(): rel for rel in self.relationships
         }
-        return relationship_dict.get(other_relationship.__hash__(include_timestamps=include_timestamps))
+        return relationship_dict.get(other_relationship.__hash__())
     
     def add_timestamps_to_relationships(self, timestamps:Union[List[float], List[str]]) -> None:
         """Adds timestamps to relationships."""
         for rel in self.relationships:
-            rel.add_timestamp(timestamps)
+            rel.combine_timestamps(timestamps=timestamps, temporal_aspect="timestamps")
     
     def add_sources_to_relationships(self, source:str) -> None:
         """Adds sources to relationships."""
