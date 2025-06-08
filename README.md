@@ -19,7 +19,7 @@
 
 ## ATOM's Architecture
 
-ATOM’s architecture is designed to dynamically construct Temporal Knowledge Graphs from unstructured, time-stamped text by first decomposing documents into atomic facts—small, self-contained segments that reduce the “forgetting effect” in LLMs, and then extracting subject, relation–object triplets along with both inherent and observation timestamps. These extracted triplets form atomic KGs that are merged in parallel using vector-based matching and threshold criteria to resolve entity and relationship conflicts, while a dual-time modeling approach maintains historical records and manages temporal inconsistencies. This modular and parallel design ensures high scalability, robustness, and continuous updates in dynamic, real-world data environments.
+ATOM’s architecture is designed to dynamically construct Temporal Knowledge Graphs from unstructured, time-stamped text by first decomposing documents into atomic facts—small, self-contained segments that reduce the “forgetting effect” in LLMs, and then extracting subject, relation–object 5-tuples along with both inherent and observation timestamps. These extracted 5-tuples form atomic KGs that are merged in parallel using vector-based matching and threshold criteria to resolve entity and relationship conflicts, while a dual-time modeling approach maintains historical records and manages temporal inconsistencies. This modular and parallel design ensures high scalability, robustness, and continuous updates in dynamic, real-world data environments.
 
 <p align="center">
   <img src="./docs/ATOM-archi.png" width="800px" alt="ATOM Workflow Diagram">
@@ -34,7 +34,7 @@ ATOM’s architecture is designed to dynamically construct Temporal Knowledge Gr
 </p>
 
 1. **Document Distillation**: Input text is split into atomic facts—short, self-contained chunks—by a lightweight documents distiller.
-2. **Triplet Extraction**: Each atomic fact is converted into subject–relation–object triplets, including `t_start` and `t_end` timestamps.
+2. **5-tuple Extraction**: Each atomic fact is converted into subject–relation–object 5-tuples, including `t_start` and `t_end` timestamps.
 3. **Atomic KG Construction**: For each atomic fact, a miniature “atomic KG” is constructed with embedded entities and relationships.
 4. **Parallel Merging**: All atomic KGs are merged in parallel using entity- and relation-matching thresholds to maintain consistency.
 5. **TKG Updates**: Newly arrived data is merged into the existing TKG without reprocessing older information, enabling dynamic updates.
