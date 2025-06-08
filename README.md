@@ -22,7 +22,7 @@
 ATOM’s architecture is designed to dynamically construct Temporal Knowledge Graphs from unstructured, time-stamped text by first decomposing documents into atomic facts—small, self-contained segments that reduce the “forgetting effect” in LLMs, and then extracting subject, relation–object triplets along with both inherent and observation timestamps. These extracted triplets form atomic KGs that are merged in parallel using vector-based matching and threshold criteria to resolve entity and relationship conflicts, while a dual-time modeling approach maintains historical records and manages temporal inconsistencies. This modular and parallel design ensures high scalability, robustness, and continuous updates in dynamic, real-world data environments.
 
 <p align="center">
-  <img src="./docs/ATOM-archi.png" width="500px" alt="ATOM Workflow Diagram">
+  <img src="./docs/ATOM-archi.png" width="800px" alt="ATOM Workflow Diagram">
 </p>
 
 ---
@@ -30,11 +30,11 @@ ATOM’s architecture is designed to dynamically construct Temporal Knowledge Gr
 ## Example of the ATOM Workflow
 
 <p align="center">
-  <img src="./docs/atom_flow_example.png" width="500px" alt="ATOM Workflow Diagram">
+  <img src="./docs/atom_flow_example.png" width="800px" alt="ATOM Workflow Diagram">
 </p>
 
 1. **Document Distillation**: Input text is split into atomic facts—short, self-contained chunks—by a lightweight documents distiller.
-2. **Triplet Extraction**: Each atomic fact is converted into subject–relation–object triplets, including `t_valid` and `t_invalid` timestamps.
+2. **Triplet Extraction**: Each atomic fact is converted into subject–relation–object triplets, including `t_start` and `t_end` timestamps.
 3. **Atomic KG Construction**: For each atomic fact, a miniature “atomic KG” is constructed with embedded entities and relationships.
 4. **Parallel Merging**: All atomic KGs are merged in parallel using entity- and relation-matching thresholds to maintain consistency.
 5. **TKG Updates**: Newly arrived data is merged into the existing TKG without reprocessing older information, enabling dynamic updates.
@@ -48,7 +48,7 @@ For more technical details, check out:
 ## Latency & Scalability
 
 <p align="center">
-  <img src="./docs/latency.png" width="500px" alt="Latency Comparison">
+  <img src="./docs/latency.png" width="800px" alt="Latency Comparison">
 </p>
 
 - **Parallel Merging**: ATOM’s parallel merging strategy significantly reduces overall latency, as illustrated in the above figure.
@@ -152,6 +152,28 @@ USERNAME = "neo4j"
 PASSWORD = "##"
 GraphIntegrator(uri=URI, username=USERNAME, password=PASSWORD).visualize_graph(knowledge_graph=kg)
 ```
+
+# Examples of DTKGs with varying observation dates
+
+## Modeling the observation time
+Both the observation time and the inherent time are stored as relation features in the DTKG. This dual time modeling facilitates flexible TKG querying. 
+The observation time modeling is determined by the use case and user preferences, addressing the question of how quickly the graph should be updated. For example, in our datasets, the observation time has been simulated as an annual snapshot for LLMs News and as a per-post snapshot for OpenAI posts. The observation time ensures the dynamism of the TKG, while the inherent time directly reflects the timing of the facts. Neo4j is employed as the graph database for visualization.
+
+## Comparison between ATOM and Graphiti
+The overall tweet structure is effectively captured by Graphiti, although some isolated entities connected exclusively to episodic nodes are observed, thereby hindering the TKG structure. Additionally, entity types are discarded. The architecture of Graphiti is effective for small datasets, as entity resolution and temporal conflicts can be managed within an LLM prompt; however, its suitability diminishes for very large datasets.
+
+ATOM effectively captures the tweet structure and maintains the DTKG's consistency and exhaustiveness through its factoid-based construction. The following figures illustrates temporal conflict resolution: when a negation with an associated timestamp is detected, the affirmative form is chosen and the time is stored as $\tau_{end}$. This enables merging with the corresponding fact when initiation information is available. If no date is provided, the negation is recorded as a negation relation. In contrast, Graphiti retains the negation and resolves it via the LLM, a process that is time-consuming and computationally expensive due to the need to include the entire TKG as context.
+
+
+<p align="center">
+  <img src="./docs/openai_posts.jpg" width="800px" alt="OpenAI posts DTKG">
+</p>
+
+<p align="center">
+  <img src="./docs/llms_history_page.jpg" width="800px" alt="LLMs History DTKG">
+</p>
+
+
 # Contributing
 
 We welcome contributions! To help improve ATOM:
