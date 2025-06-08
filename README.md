@@ -22,7 +22,7 @@
 ATOM’s architecture is designed to dynamically construct Temporal Knowledge Graphs from unstructured, time-stamped text by first decomposing documents into atomic facts—small, self-contained segments that reduce the “forgetting effect” in LLMs, and then extracting subject, relation–object triplets along with both inherent and observation timestamps. These extracted triplets form atomic KGs that are merged in parallel using vector-based matching and threshold criteria to resolve entity and relationship conflicts, while a dual-time modeling approach maintains historical records and manages temporal inconsistencies. This modular and parallel design ensures high scalability, robustness, and continuous updates in dynamic, real-world data environments.
 
 <p align="center">
-  <img src="./docs/ATOM-archi.jpg" width="500px" alt="ATOM Workflow Diagram">
+  <img src="./docs/ATOM-archi.png" width="500px" alt="ATOM Workflow Diagram">
 </p>
 
 ---
@@ -30,7 +30,7 @@ ATOM’s architecture is designed to dynamically construct Temporal Knowledge Gr
 ## Example of the ATOM Workflow
 
 <p align="center">
-  <img src="./docs/atom_s_flow_example.jpg" width="500px" alt="ATOM Workflow Diagram">
+  <img src="./docs/atom_flow_example.png" width="500px" alt="ATOM Workflow Diagram">
 </p>
 
 1. **Document Distillation**: Input text is split into atomic facts—short, self-contained chunks—by a lightweight documents distiller.
@@ -48,7 +48,7 @@ For more technical details, check out:
 ## Latency & Scalability
 
 <p align="center">
-  <img src="./evaluation/latency_comparison_with_linear.svg" width="500px" alt="Latency Comparison">
+  <img src="./docs/latency.png" width="500px" alt="Latency Comparison">
 </p>
 
 - **Parallel Merging**: ATOM’s parallel merging strategy significantly reduces overall latency, as illustrated in the above figure.
