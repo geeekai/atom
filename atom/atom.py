@@ -1,25 +1,41 @@
 from atom.models import KnowledgeGraph, Entity, Relationship, RelationshipProperties
-from atom.utils import Matcher, LangchainOutputParser, RelationshipsExtractor
-import asyncio
-import dateparser
+from atom.graph_matching import GraphMatcher
+from atom.llm_output_parsing import LangchainOutputParser
+from atom.models.schemas import Relationship as RelationshipSchema
+from atom.models.schemas import RelationshipsExtractor
 import concurrent.futures
+from typing import List, Optional
+from atom.models.prompts import Prompt
+from dateutil import parser
+import logging
+import asyncio
 
-from typing import List 
-import time
+logger = logging.getLogger(__name__)
 
 class Atom:
-    def __init__(self, llm_model, embeddings_model) -> None:        
+    def __init__(self, 
+                 llm_model,
+                 embeddings_model,
+                 ) -> None:        
         """
         Initializes the ATOM with specified language model, embeddings model, and operational parameters.
         
         Args:
-        llm_model: The language model instance to be used for extracting entities and relationships from text.
-        embeddings_model: The embeddings model instance to be used for creating vector representations of extracted entities.
-        sleep_time (int): The time to wait (in seconds) when encountering rate limits or errors. Defaults to 5 seconds.
+        matcher: The matcher instance to be used for matching entities and relationships.
+        llm_output_parser: The language model instance to be used for extracting entities and relationships from text.
         """
-
-        self.matcher = Matcher()
-        self.langchain_output_parser = LangchainOutputParser(llm_model=llm_model, embeddings_model=embeddings_model)
+        self.matcher = GraphMatcher()
+        self.llm_output_parser = LangchainOutputParser(llm_model=llm_model, embeddings_model=embeddings_model)
+    
+    async def extract_quintuples(self, atomic_facts: List[str], observation_timestamp: str) -> List[RelationshipsExtractor]:
+        """
+        Extracts relationships from atomic facts using the language model.
+        """
+        return await self.llm_output_parser.extract_information_as_json_for_context(
+            output_data_structure=RelationshipsExtractor,
+            contexts=atomic_facts,
+            system_query=Prompt.temporal_system_query(observation_timestamp) + Prompt.EXAMPLES.value
+        )
 
     def merge_two_kgs(self, kg1, kg2, rel_threshold:float=0.8, ent_threshold:float=0.8):
         """
@@ -36,7 +52,7 @@ class Atom:
         )
         return KnowledgeGraph(entities=updated_entities, relationships=updated_relationships)
 
-    def parallel_atomic_merge(self, kgs, rel_threshold:float=0.8, ent_threshold:float=0.8, max_workers=4):
+    def parallel_atomic_merge(self, kgs: List[KnowledgeGraph], existing_kg: Optional[KnowledgeGraph] = None, rel_threshold: float = 0.8, ent_threshold: float = 0.8, max_workers: int = 4) -> KnowledgeGraph:
         """
         Merges a list of KnowledgeGraphs in parallel, reducing them pairwise.
         """
@@ -63,84 +79,118 @@ class Atom:
                 merged_results.append(leftover)
             
             current = merged_results
-
-        # At the end, current[0] is our big merged KG
+        if existing_kg and not existing_kg.is_empty():
+            return self.merge_two_kgs(current[0], existing_kg, rel_threshold, ent_threshold)
         return current[0]
-    
-    async def build_atomic_kg_from_triplets(self, relationships:RelationshipsExtractor):
+
+    async def build_atomic_kg_from_quintuples(self, 
+        relationships:list[RelationshipSchema], 
+        entity_name_weight:float=0.8, 
+        entity_label_weight:float=0.2,
+        rel_threshold:float=0.8,
+        ent_threshold:float=0.8,
+        max_workers:int=8,
+        ):
         embedded_relationships = []
         temp_kg = KnowledgeGraph(entities=[Entity(**rel.startNode.model_dump()) for rel in relationships] + [Entity(**rel.endNode.model_dump()) for rel in relationships])
-        await temp_kg.embed_entities(embeddings_function=self.langchain_output_parser.calculate_embeddings)
+        await temp_kg.embed_entities(embeddings_function=self.llm_output_parser.calculate_embeddings, entity_name_weight=entity_name_weight, entity_label_weight=entity_label_weight)
 
         for relationship in relationships:
-            if relationship.t_valid is None:
-                relationship.t_valid = []
-            elif relationship.t_invalid is None:
-                relationship.t_invalid = []
+            if relationship.t_start is None:
+                relationship.t_start = []
+            elif relationship.t_end is None:
+                relationship.t_end = []
+            
+            start_entity = temp_kg.get_entity(Entity(**relationship.startNode.model_dump()))
+            end_entity = temp_kg.get_entity(Entity(**relationship.endNode.model_dump()))
+            
+            # Handle the case where entities might not be found (though they should be)
+            if start_entity is None or end_entity is None:
+                raise ValueError(f"Could not find entities for relationship {relationship.name}")
+            
+            # Handle timestamp parsing with None checks and error handling
+            t_start_timestamps = []
+            if relationship.t_start:
+                for ts in relationship.t_start:
+                    try:
+                        parsed_dt = parser.parse(ts)
+                        if parsed_dt is not None:
+                            t_start_timestamps.append(parsed_dt.timestamp())
+                    except Exception as e:
+                        logger.warning(f"Could not parse t_start timestamp '{ts}': {e}. Skipping this timestamp.")
+                        # Keep the place empty by simply not adding anything to the list
+                        continue
+            
+            t_end_timestamps = []
+            if relationship.t_end:
+                for ts in relationship.t_end:
+                    try:
+                        parsed_dt = parser.parse(ts)
+                        if parsed_dt is not None:
+                            t_end_timestamps.append(parsed_dt.timestamp())
+                    except Exception as e:
+                        logger.warning(f"Could not parse t_end timestamp '{ts}': {e}. Skipping this timestamp.")
+                        # Keep the place empty by simply not adding anything to the list
+                        continue
             
             embedded_relationships.append(Relationship(name=relationship.name, 
-                                        startEntity=temp_kg.get_entity(Entity(**relationship.startNode.model_dump())), 
-                                        endEntity= temp_kg.get_entity(Entity(**relationship.endNode.model_dump())),
-                                        properties = RelationshipProperties(t_valid=[dateparser.parse(ts).timestamp() for ts in relationship.t_valid], 
-                                                                            t_invalid=[dateparser.parse(ts).timestamp() for ts in relationship.t_invalid])))
+                                        startEntity=start_entity, 
+                                        endEntity=end_entity,
+                                        properties = RelationshipProperties(t_start=t_start_timestamps, 
+                                                                            t_end=t_end_timestamps)))
             
         
 
         kg = KnowledgeGraph(entities=temp_kg.entities, relationships=embedded_relationships)
-        await kg.embed_relationships(embeddings_function=self.langchain_output_parser.calculate_embeddings)
+        await kg.embed_relationships(embeddings_function=self.llm_output_parser.calculate_embeddings)
+        # these lines are just to ensure there are no duplicates entities and relationships inside the same factoid.
+        atomic_kgs = kg.split_into_atomic_kgs()
         
-        return kg
+        return self.parallel_atomic_merge(
+            kgs=atomic_kgs, 
+            rel_threshold=rel_threshold, 
+            ent_threshold=ent_threshold, 
+            max_workers=max_workers)
 
     async def build_graph(self, 
                           atomic_facts:List[str],
                           obs_timestamp: str,
                           existing_knowledge_graph:KnowledgeGraph=None,
                           ent_threshold:float = 0.8,
-                          rel_threshold:float = 0.8,
-                          entity_name_weight:float=0.7,
-                          entity_label_weight:float=0.3,
-                          max_workers:int=4,
+                          rel_threshold:float = 0.7,
+                          entity_name_weight:float=0.8,
+                          entity_label_weight:float=0.2,
+                          max_workers:int=8,
                         ) -> KnowledgeGraph:
-        system_query = f""" 
-        Observation Time : {obs_timestamp}
-        You are a top-tier algorithm designed for extracting information in structured 
-        formats to build a knowledge graph.
-        Try to capture as much information from the text as possible without 
-        sacrificing accuracy. Do not add any information that is not explicitly mentioned in the text
-        Remember, the knowledge graph should be coherent and easily understandable, 
-        so maintaining consistency in entity references is crucial.
-        """
-        examples = """ 
-        FEW SHOT EXAMPLES \n
-        * Michel served as CFO at Acme Corp from 2019 to 2021. He was hired by Beta Inc in 2021, but left that role in 2023. -> (michel, is_cfo, acme corp, [2019], [2021]), (michel, was_hired_by, beta inc, 2021, 2023)
-        \n
-        * Subsequent experiments confirmed the role of microRNAs in modulating cell growth. -> (experiments, confirmed_role, micrornas, [], []), (micrornas, modulate, cell growth, [], [])
-        \n
-        * Researchers used high-resolution imaging in a study on neural plasticity. -> (researchers, used, high-resolution imaging, [], []), (high-resolution imaging, used_in, study on neural plasticity, [], [])
-        \n
-        * Sarah was a board member of GreenFuture until 2019. -> (Sarah, is_board_member, greenfuture, [], [2019])
-        \n
-        * Dr. Lee was the head of the Oncology Department until 2022. -> (dr. lee, is_head_of, oncology department, [], [2022])
-        \n
-        * Activity-dependent modulation of receptor trafficking is crucial for maintaining synaptic efficacy. -> (activity-dependent modulation, involves, receptor trafficking, [], []), (receptor trafficking, maintains, synaptic efficacy, [], [])
-        \n
-        * (observation time = <observation_date>) John Doe is no longer the CEO of GreenIT a few months ago. -> (john doe, is_CEO, greenit, [], [<new observation_date by deducting 3months >])
-        """
-        print("[INFO] ------- Extracting Triplets")
-        relationships = await self.langchain_output_parser.extract_information_as_json_for_context(output_data_structure=RelationshipsExtractor, contexts=atomic_facts, system_query=system_query+examples)
+        system_query = Prompt.temporal_system_query(obs_timestamp=obs_timestamp)
+        examples = Prompt.EXAMPLES.value
+        logger.info("------- Extracting Quintuples---------")
+        relationships = await self.llm_output_parser.extract_information_as_json_for_context(output_data_structure=RelationshipsExtractor, contexts=atomic_facts, system_query=system_query+examples)
         
-        print("[INFO] ------- Building Atomic KGs")
+        logger.info("------- Building Atomic KGs---------")
         
-        atomic_kgs = await asyncio.gather(*list(map(self.build_atomic_kg_from_triplets, [relation.relationships for relation in relationships])))
-        print("[INFO] ------- Adding Source Context to Atomic KGs")
+        atomic_kgs = await asyncio.gather(*list(map(
+            self.build_atomic_kg_from_quintuples, 
+            [relation.relationships for relation in relationships], 
+            [entity_name_weight for _ in relationships], 
+            [entity_label_weight for _ in relationships],
+            [rel_threshold for _ in relationships],
+            [ent_threshold for _ in relationships],
+            [max_workers for _ in relationships])))
+
+        logger.info("------- Adding Source Context to Atomic KGs---------")
         for atomic_kg, fact in zip(atomic_kgs, atomic_facts):
-            atomic_kg.add_sources_to_relationships(source=fact)
+            atomic_kg.add_sources_to_relationships(sources=[fact])
 
-        print("[INFO] ------- Merging Atomic KGs")
+        logger.info("------- Merging Atomic KGs---------")
         cleaned_atomic_kgs = [kg for kg in atomic_kgs if kg.relationships != []]
-        merged_kg = self.parallel_atomic_merge(kgs=cleaned_atomic_kgs, rel_threshold=rel_threshold, ent_threshold=ent_threshold, max_workers=max_workers)
+        merged_kg = self.parallel_atomic_merge(kgs=cleaned_atomic_kgs, 
+        rel_threshold=rel_threshold, 
+        ent_threshold=ent_threshold, 
+        max_workers=max_workers
+        )
 
-        print("[INFO] ------- Adding Timestamps to Relationships")
+        logger.info("------- Adding Timestamps to Relationships---------")
         merged_kg.add_timestamps_to_relationships(timestamps=[obs_timestamp])
     
         if existing_knowledge_graph:
@@ -150,6 +200,8 @@ class Atom:
                                                                  relationships_2=existing_knowledge_graph.relationships,
                                                                  ent_threshold=ent_threshold,
                                                                  rel_threshold=rel_threshold,
+                                                                 entity_name_weight=entity_name_weight,
+                                                                 entity_label_weight=entity_label_weight
                                                                  )    
         
             constructed_kg = KnowledgeGraph(entities=global_entities, relationships=global_relationships)
@@ -160,10 +212,10 @@ class Atom:
                                                    atomic_facts_with_obs_timestamps:dict,
                                                     existing_knowledge_graph:KnowledgeGraph=None,
                                                     ent_threshold:float = 0.8,
-                                                    rel_threshold:float = 0.8,
+                                                    rel_threshold:float = 0.7,
                                                     entity_name_weight:float=0.8,
                                                     entity_label_weight:float=0.2,
-                                                    max_workers:int=4,
+                                                    max_workers:int=8,
                                                ):
         kgs = await asyncio.gather(*[
                         self.build_graph(
@@ -181,3 +233,15 @@ class Atom:
         
         return self.parallel_atomic_merge(kgs=kgs, rel_threshold=rel_threshold, ent_threshold=ent_threshold, max_workers=max_workers)
     
+    async def batch_build_graph_from_different_obs_times(self,
+                                                          atomic_facts_with_obs_timestamps:dict,
+                                                          existing_knowledge_graph:KnowledgeGraph=None,
+                                                          cache_dir:str=None,
+                                                          ent_threshold:float = 0.8,
+                                                          rel_threshold:float = 0.7,
+                                                          entity_name_weight:float=0.8,
+                                                          entity_label_weight:float=0.2,
+                                                          max_workers:int=8,
+                                                          batch_size:int=40,
+                                                          ):
+        pass
