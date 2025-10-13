@@ -1,61 +1,92 @@
-# ATOM: AdapTive and OptiMized dynamic temporal knowledge graph construction
+# ATOM: AdapTive and OptiMized Dynamic Temporal Knowledge Graph Construction Using LLMs
 
-[![GitHub forks](https://img.shields.io/github/forks/geeekai/atom?style=social)](https://github.com/geeekai/atom/fork)
-[![GitHub stars](https://img.shields.io/github/stars/geeekai/atom?style=social)](https://github.com/geeekai/atom)
+[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
-**ATOM** (AdapTive and OptiMized) is a scalable framework for building and continuously updating **Temporal Knowledge Graphs (TKGs)** from timestamped texts. This repository implements a few-shot approach that splits input data into minimal, self-contained “atomic” facts. From these atomic facts, small atomic KGs are derived and then merged **in parallel** to preserve **semantic** and **temporal** consistency at scale.
+A few-shot and scalable approach for building and continuously updating Temporal Knowledge Graphs (TKGs) from unstructured texts.
 
----
+## Overview
+
+ATOM (AdapTive and OptiMized) addresses key limitations in current zero- and few-shot TKG construction methods by:
+
+- ✅ **Improving exhaustivity**: Capturing comprehensive fact coverage from longer texts (~31% gain on factual exhaustivity)
+- ✅ **Ensuring stability**: Producing consistent TKGs across multiple runs (~17% improvement)
+- ✅ **Enabling scalability**: Supporting large-scale dynamic temporal updates through parallel architecture (93.8% latency reduction vs. Graphiti)
 
 ## Key Features
 
-- **Few-Shot Extraction**: No extensive domain-specific fine-tuning is required.
-- **Atomic Fact Splitting**: Processes small, self-contained text segments to minimize the “forgetting effect.”
-- **Dual-Time Modeling**: Distinguishes between **inherent timestamps** (when the fact actually occurs) and **observation timestamps** (when the fact is ingested).
-- **Parallel Architecture**: Merges Knowledge Graphs (KGs) in parallel without repeated LLM prompts for merging.
-- **Stable & Exhaustive**: Ensures consistent outputs across multiple LLM runs while capturing as many facts as possible.
-- **Continuous Updates**: Seamlessly accommodates new information while preserving previously ingested data.
+### Atomic Fact Decomposition
+ATOM decomposes unstructured text into **atomic facts** - short, self-contained snippets that convey exactly one piece of information. This addresses the "forgetting effect" where LLMs prioritize salient information in longer contexts while omitting key relationships.
 
+### Dual-Time Modeling
+ATOM incorporates dual-time modeling, differentiating between:
+- **Observation time** (`t_obs`): When facts are observed
+- **Validity period** (`t_start`, `t_end`): Temporal information conveyed by the facts themselves
 
-## ATOM's Architecture
+### Parallel Architecture
+The framework employs three modules running in parallel:
+1. **Module-1**: Atomic Fact Decomposition
+2. **Module-2**: Atomic TKGs Construction (parallel 5-tuple extraction)
+3. **Module-3**: Parallel Atomic Merge of TKGs and DTKG Update
 
-ATOM’s architecture is designed to dynamically construct Temporal Knowledge Graphs from unstructured, time-stamped text by first decomposing documents into atomic facts—small, self-contained segments that reduce the “forgetting effect” in LLMs, and then extracting subject, relation–object 5-tuples along with both inherent and observation timestamps. These extracted 5-tuples form atomic KGs that are merged in parallel using vector-based matching and threshold criteria to resolve entity and relationship conflicts, while a dual-time modeling approach maintains historical records and manages temporal inconsistencies. This modular and parallel design ensures high scalability, robustness, and continuous updates in dynamic, real-world data environments.
+## Architecture
+
+ATOM employs a three-module parallel pipeline that constructs and continuously updates Dynamic Temporal Knowledge Graphs (DTKGs) from unstructured text. 
+
+**Module-1 (Atomic Fact Decomposition)** splits input documents `D_t` observed at time `t` into temporal atomic facts `{f_{t,1}, ..., f_{t,m_t}}` using LLM-based prompting with an optimal chunk size of <400 tokens, where each temporal atomic fact is a short, self-contained snippet that conveys exactly one piece of information. 
+
+**Module-2 (Atomic TKGs Construction)** extracts 5-tuples (quintuples) in parallel from each atomic fact `f_{t,i}` to construct atomic temporal KGs `G^t_i = ExtractQuintuplesLLM(f_{t,i}) ⊆ P(E^t × R^t × E^t × T^t_start × T^t_end)`, while embedding nodes and relations and addressing temporal resolution during extraction by transforming end validity facts into affirmative counterparts while modifying only the `t_end` time (e.g., "John Doe is no longer CEO of X on 01-01-2026" → `(John_Doe, is_ceo, X, [.], [01-01-2026])`). 
+
+**Module-3 (Parallel Atomic Merge)** employs a binary merge algorithm to merge pairs of atomic TKGs through iterative pairwise merging in parallel until convergence, with three resolution phases: (1) entity resolution using exact match or cosine similarity threshold `θ_E = 0.8`, (2) relation resolution merging relation names regardless of endpoints and timestamps using threshold `θ_R = 0.7`, and (3) temporal resolution that merges observation and validity time sets for relations with similar `(e_s, r_p, e_o)`. 
+
+The resulting TKG snapshot `G^t_s` is then merged with the previous DTKG `G^{t-1}` using the merge operator ⊕ to yield the updated DTKG: `G^t = G^{t-1} ⊕ G^t_s`. 
+
 
 <p align="center">
-  <img src="./docs/ATOM-archi.png" width="800px" alt="ATOM Workflow Diagram">
+  <img src="./docs/atom_architecture.png" width="800px" alt="ATOM Architecture">
 </p>
 
 ---
+## The prompts
 
+
+
+---
 ## Example of the ATOM Workflow
+ On observation date 09-01-2007, ATOM processes the fact "Steve Jobs was the CEO of Apple Inc. on January 9, 2007" to create the 5-tuple `(Steve Jobs, is_ceo, Apple Inc., [09-01-2007], [.])` where `t_start = [09-01-2007]` and `t_end = [.]` (empty/unknown). Later, on observation date 05-10-2011, when processing the incoming update "Steve Jobs is no longer the CEO of Apple Inc. on 05-10-2011", ATOM's Module-2 transforms this **end validity fact** into its affirmative counterpart while modifying only the `t_end` time, producing `(Steve Jobs, is_ceo, Apple Inc., [.], [05-10-2011])` rather than creating a contradictory relation like `is_no_longer_ceo`. During Module-3's temporal resolution phase, ATOM detects that both 5-tuples share the same `(e_s, r_p, e_o)` triple and merges their time lists to produce the final 5-tuple: `(Steve Jobs, is_ceo, Apple Inc., [09-01-2007], [05-10-2011])`, which correctly represents that Steve Jobs was CEO from January 9, 2007 to October 5, 2011, while maintaining dual-time modeling with `t_obs = [09-01-2007, 05-10-2011]` to track when each piece of information was observed. This preprocessing of end-actions during extraction enables ATOM's LLM-independent merging approach, preventing temporal inconsistencies where separate quintuples describing the same temporal fact would coexist in the TKG.
+
 
 <p align="center">
-  <img src="./docs/atom_flow_example.png" width="800px" alt="ATOM Workflow Diagram">
+  <img src="./docs/example_atom.png" width="800px" alt="ATOM Workflow Diagram">
 </p>
-
-1. **Document Distillation**: Input text is split into atomic facts—short, self-contained chunks—by a lightweight documents distiller.
-2. **5-tuple Extraction**: Each atomic fact is converted into subject–relation–object 5-tuples, including `t_start` and `t_end` timestamps.
-3. **Atomic KG Construction**: For each atomic fact, a miniature “atomic KG” is constructed with embedded entities and relationships.
-4. **Parallel Merging**: All atomic KGs are merged in parallel using entity- and relation-matching thresholds to maintain consistency.
-5. **Temporal Conflict Resolution**: ATOM manages temporal conflicts by employing a dual-time modeling approach that distinguishes between the observation time of a fact and its inherent time. The framework's strategy is to resolve these conflicts before its large-scale parallel merge, which enhances scalability by not needing to re-prompt a Large Language Model (LLM) during the merge process. It handles negated temporal statements, such as "is no longer the CEO," by converting them into affirmative forms while marking the specific time as invalid, which allows for easier matching with the corresponding "beginning action" facts. During the binary merge stage, if two relations are determined to be similar, their timestamp lists for $\tau_{start}$, $\tau_{end}$, and observation time are consolidated by appending the new timestamps to the existing lists, thereby preserving a complete history of the fact's temporal data. After the merge, this historical list of timestamps is analyzed to remove inconsistencies; for example, if a $\tau_{start}$ list appears as [2020, 2020, 2020, 2021], the 2021 value could be identified as a statistical outlier and pruned. Consequently, when the knowledge graph is queried, the median of the timestamp history is selected to represent the most consistent and reliable temporal value for that specific fact.
-6. **TKG Updates**: Newly arrived data is merged into the existing TKG without reprocessing older information, enabling dynamic updates. 
 
 For more technical details, check out:
 - **`atom/atom.py`**: Core logic for building, merging, and updating the knowledge graphs.
-- **`evaluation/`**: Notebooks demonstrating performance benchmarks, stability tests, and scalability studies.
+- **`evaluation/`**: Scripts to reconduct the experiments. 
 
 ---
 
 ## Latency & Scalability
 
+ATOM achieves significant latency reduction of 93.8% compared to Graphiti and 95.3% compared to iText2KG by employing a parallel architecture that addresses computational bottlenecks in traditional approaches. While iText2KG and Graphiti separate entity and relation extraction steps (increasing latency and doubling LLM calls), and use incremental entity/relation resolution that restricts parallel requests (with Graphiti's LLM-based resolution limiting parallelization as the graph scales to millions of nodes), ATOM's architecture facilitates (1) parallel LLM calls for 5-tuple extraction using 8 threads with batch size of 40 atomic facts, (2) parallel merge of atomic TKGs through iterative pairwise merging, (3) LLM-independent merging using distance metrics for entity/relation resolution, and (4) temporal resolution during extraction rather than during merging. Notably, Module-3 (the parallel atomic merge) accounts for only 13% of ATOM's total latency, with the remainder attributed to API calls—which can be further minimized by leveraging the parallel architecture through either increasing the batch size (by upgrading the API tier) or scaling hardware for local LLM deployment
+
 <p align="center">
-  <img src="./docs/latency.png" width="800px" alt="Latency Comparison">
+  <img src="./docs/latency_comparison_plot.png" width="800px" alt="Latency Comparison">
 </p>
 
-- **Parallel Merging**: ATOM’s parallel merging strategy significantly reduces overall latency, as illustrated in the above figure.
-- **Scalability**: Merging is performed without additional LLM prompts, making it feasible to scale to millions of nodes in real-world deployments.
-
 ---
+
+## Results
+Empirical evaluations demonstrate that ATOM's atomic fact decomposition improves temporal exhaustivity by ~18% and factual exhaustivity by ~31% compared to direct lead paragraph extraction, with ~31% reduction in factual omission and ~17% improvement in stability across multiple runs, though at the cost of a ~9% increase in hallucination rate due to LLM-inferred atomic facts. The parallel architecture enables 93.8% latency reduction versus Graphiti and 95.3% versus iText2KG, demonstrating ATOM's scalability for large-scale dynamic TKG construction. For DTKG construction, ATOM outperforms Graphiti and iText2KG for entity resolution/relation resolution.
+---
+
+## Example
+The following figure demonstrates the difference between ATOM's and Graphiti's temporal modeling using COVID-19 news from 09-01-2020 to 23-01-2020. For the fact "The mysterious respiratory virus spread to at least 10 other countries" observed on 23-01-2020, Graphiti treats the observation time as the validity start time (t_start), setting `valid_at = 23-01-2020` and implying the spread occurred on that specific date. In contrast, ATOM's dual-time modeling preserves the observation time (t_obs = 23-01-2020) separately from the validity period, recognizing that the article was published on 23-01-2020 but this does not guarantee the spread occurred at that exact time—the spread could have happened days or weeks earlier. This distinction is essential for temporal reasoning: Graphiti would infer that all events in a news article happened on the publication date, while ATOM correctly models when information was observed versus when events actually occurred. This prevents temporal misattribution in dynamic knowledge graphs.
+
+<p align="center">
+  <img src="./docs/comparison_example.png" width="800px" alt="OpenAI posts DTKG">
+</p>
+
+
 
 ## Installation
 
@@ -153,26 +184,6 @@ USERNAME = "neo4j"
 PASSWORD = "##"
 GraphIntegrator(uri=URI, username=USERNAME, password=PASSWORD).visualize_graph(knowledge_graph=kg)
 ```
-
-# Examples of DTKGs with varying observation dates
-
-## Modeling the observation time
-Both the observation time and the inherent time are stored as relation features in the DTKG. This dual time modeling facilitates flexible TKG querying. 
-The observation time modeling is determined by the use case and user preferences, addressing the question of how quickly the graph should be updated. For example, in our datasets, the observation time has been simulated as an annual snapshot for LLMs News and as a per-post snapshot for OpenAI posts. The observation time ensures the dynamism of the TKG, while the inherent time directly reflects the timing of the facts. Neo4j is employed as the graph database for visualization.
-
-## Comparison between ATOM and Graphiti
-The overall tweet structure is effectively captured by Graphiti, although some isolated entities connected exclusively to episodic nodes are observed, thereby hindering the TKG structure. Additionally, entity types are discarded. The architecture of Graphiti is effective for small datasets, as entity resolution and temporal conflicts can be managed within an LLM prompt; however, its suitability diminishes for very large datasets.
-
-ATOM effectively captures the tweet structure and maintains the DTKG's consistency and exhaustiveness through its factoid-based construction. The following figures illustrates temporal conflict resolution: when a negation with an associated timestamp is detected, the affirmative form is chosen and the time is stored as $\tau_{end}$. This enables merging with the corresponding fact when initiation information is available. If no date is provided, the negation is recorded as a negation relation. In contrast, Graphiti retains the negation and resolves it via the LLM, a process that is time-consuming and computationally expensive due to the need to include the entire TKG as context.
-
-
-<p align="center">
-  <img src="./docs/openai_posts.jpg" width="800px" alt="OpenAI posts DTKG">
-</p>
-
-<p align="center">
-  <img src="./docs/llms_history_page.jpg" width="800px" alt="LLMs History DTKG">
-</p>
 
 
 # Contributing

@@ -6,7 +6,9 @@ __pycache__/
 # Notebooks
 examples/
 deprecated/
-
+evaluation/cache/
+evaluation/logs/
+evaluation copy/
 # Data & outputs
 data/
 temp/
