@@ -1,4 +1,4 @@
-# ATOM: AdapTive and OptiMized Temporal Knowledge Graph Construction
+# ATOM: AdapTive and OptiMized dynamic temporal knowledge graph construction
 
 [![GitHub forks](https://img.shields.io/github/forks/geeekai/atom?style=social)](https://github.com/geeekai/atom/fork)
 [![GitHub stars](https://img.shields.io/github/stars/geeekai/atom?style=social)](https://github.com/geeekai/atom)
