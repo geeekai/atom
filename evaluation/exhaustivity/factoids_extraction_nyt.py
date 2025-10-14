@@ -35,7 +35,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from atom.llm_output_parsing.langchain_output_parser import LangchainOutputParser
 from atom.models import AtomicFact
-from langchain_anthropic import ChatAnthropic
+from langchain_anthropic import ChatAnthropic, AnthropicAIEmbeddings
 
 
 # Configure logging
