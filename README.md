@@ -55,7 +55,7 @@ It is performed using the object `AtomicFact` in `atom/models/schemas.py`
 You are an expert factoid extraction engine. Your primary function is to read a news paragraph and its associated observation date, and then decompose the text into a comprehensive list of atomic, self-contained, and temporally-grounded facts.
 
 ## Task
-Given an input paragraph and an `observation_date`, generate a list of all distinct factoids present in the text.
+Given an input paragraph and an `observation_date`, generate a list of all distinctatomic factspresent in the text.
 
 ## Guidelines for Generating Temporal Factoids
 
@@ -221,12 +221,12 @@ It is recommended to use a virtual environment (e.g., conda, venv) to isolate de
 
 # Example: Building a Temporal Knowledge Graph (TKG) with ATOM from LLMS History
 
-In this example, we demonstrate how to use ATOM to extract factoids from a dataset, build a dynamic Temporal Knowledge Graph (TKG) across different observation timestamps, and finally visualize the graph using Neo4j.
+In this example, we demonstrate how to use ATOM to extractatomic factsfrom a dataset, build a dynamic Temporal Knowledge Graph (TKG) across different observation timestamps, and finally visualize the graph using Neo4j.
 
 The process involves:
 1. **Loading Data**: Reading an Excel file containing LLMS history with associated observation dates.
-2. **Factoid Extraction**: Using the `LangchainOutputParser` to extract factoids from the text.
-3. **Graph Construction**: Grouping factoids by observation date and building a knowledge graph that merges atomic KGs from different timestamps.
+2. **Factoid Extraction**: Using the `LangchainOutputParser` to extractatomic factsfrom the text.
+3. **Graph Construction**: Groupingatomic factsby observation date and building a knowledge graph that merges atomic KGs from different timestamps.
 4. **Visualization**: Rendering the final graph using the GraphIntegrator module connected to a Neo4j database.
 
 Below is the derived example code:
@@ -246,7 +246,8 @@ from atom import Atom, Neo4jStorage
 openai_api_key = "##"
 openai_llm_model = ChatOpenAI(
     api_key=openai_api_key,
-    model="gpt-4.1",
+    model="gpt-4.1-2025-04-14",
+    temperature=0,
     max_tokens=None,
     timeout=None,
     max_retries=2,
@@ -257,32 +258,30 @@ openai_embeddings_model = OpenAIEmbeddings(
     model="text-embedding-3-large",
 )
 
-# Load the LLMS history dataset (ensure the correct path to your Excel file)
-llms_history = pd.read_excel("../datasets/llms_history_and_openai_posts/llms_history.xlsx")
+# Load the 2020-COVID-NYT dataset pickle
+news_covid = pd.read_pickle("../datasets/nyt_news/2020_nyt_COVID_last_version_ready.pkl")
 
-# Define a helper function to convert the dataframe's factoids into a dictionary,
-# where keys are observation dates and values are the combined list of factoids for that date.
-def to_dictionary(df):
-    # Convert factoid strings to lists if necessary
-    if isinstance(df['factoids'][0], str):
-        df["factoids"] = df["factoids"].apply(lambda x: ast.literal_eval(x))
-    grouped_df = df.groupby("observation date")["factoids"].sum().reset_index()
+# Define a helper function to convert the dataframe'satomic factsinto a dictionary,
+# where keys are observation dates and values are the combined list ofatomic factsfor that date.
+def to_dictionary(df): 
+
+    if isinstance(df['factoids_g_truth'][0], str):
+        df["factoids_g_truth"] = df["factoids_g_truth"].apply(lambda x:ast.literal_eval(x))
+    grouped_df = df.groupby("date")["factoids_g_truth"].sum().reset_index()
     return {
-        str(date): factoids
-        for date, factoids in grouped_df.set_index("observation date")["factoids"].to_dict().items()
-    }
+        str(date): factoids for date, factoids in grouped_df.set_index("date")["factoids_g_truth"].to_dict().items()
+        }
 
-# Convert the LLMS history dataframe into the required dictionary format
-llms_history_dict = to_dictionary(llms_history)
+# Convert the dataframe into the required dictionary format
+news_covid_dict = to_dictionary(news_covid)
 
 # Initialize the ATOM pipeline with the OpenAI models
 atom = Atom(llm_model=openai_llm_model, embeddings_model=openai_embeddings_model)
 
 # Build the knowledge graph across different observation timestamps
 kg = await atom.build_graph_from_different_obs_times(
-    atomic_facts_with_obs_timestamps=llms_history_dict,
-    rel_threshold=0.7,
-    ent_threshold=0.8
+    atomic_facts_with_obs_timestamps=news_covid_dict,
+    
 )
 
 # Visualize the resulting knowledge graph using Neo4j
