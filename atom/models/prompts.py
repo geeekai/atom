@@ -110,6 +110,7 @@ class AtomicFactsPrompt(Enum):
     """
 '''
 
+'''
 class AtomicFactsPrompt(Enum):
     system_query = """
     # Atomic Facts Evaluation Task
@@ -165,3 +166,4 @@ A predicted fact is NOT a match if:
 - Gold Standard Facts: {ground_truth}
 - Predicted Atomic Facts: {predicted}
 """
+'''

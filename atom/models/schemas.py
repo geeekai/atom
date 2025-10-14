@@ -204,6 +204,7 @@ class RelationshipsExtractor(BaseModel):
         )
     )
 
+'''
 # ---------------- LLM as Judge for Quintuples Extraction --------------------------- #
 
 class QuintuplesJudge(BaseModel):
@@ -256,46 +257,6 @@ class QuintuplesJudge(BaseModel):
         }
 
 # ---------------- LLM as Judge for Atomic Facts Extraction --------------------------- #
-''' 
-class AtomicFactsJudge(BaseModel):
-    """
-    Structured output for Atomic Facts Evaluation
-    """
-    
-    # Content Evaluation Metrics (LLM provides these)
-    MATCH: int = Field(description="Number of predicted atomic facts that accurately correspond to gold standard, regardless of temporal information")
-    HALL: Optional[int] = None
-    OM: Optional[int] = None
-    HALL_t: Optional[int] = None
-    # Temporal Evaluation Metrics (LLM provides these)
-    MATCH_t: int = Field(description="Only for Matches; Number of temporal information that accurately correspond to gold standard")
-    OM_t: int = Field(description="Only for Matches; Number of temporal information missing from predictions")
-
-    def calculate_metrics(self, n_predicted: int, n_gold: int) -> dict:
-        """Calculate derived metrics from base counts"""
-        self.HALL = n_predicted - self.MATCH
-        self.OM = n_gold - self.MATCH
-        self.HALL_t = self.MATCH - self.MATCH_t - self.OM_t
-
-        # Content metrics
-        content_precision = self.MATCH / (self.MATCH + self.HALL) if (self.MATCH + self.HALL) > 0 else 0.0
-        content_recall = self.MATCH / (self.MATCH + self.OM) if (self.MATCH + self.OM) > 0 else 0.0
-        content_f1 = (2 * content_precision * content_recall) / (content_precision + content_recall) if (content_precision + content_recall) > 0 else 0.0
-        
-        # Temporal metrics
-        temporal_precision = self.MATCH_t / (self.MATCH_t + self.HALL_t) if (self.MATCH_t + self.HALL_t) > 0 else 0.0
-        temporal_recall = self.MATCH_t / (self.MATCH_t + self.OM_t) if (self.MATCH_t + self.OM_t) > 0 else 0.0
-        temporal_f1 = (2 * temporal_precision * temporal_recall) / (temporal_precision + temporal_recall) if (temporal_precision + temporal_recall) > 0 else 0.0
-        
-        return {
-            "content_precision": content_precision,
-            "content_recall": content_recall,
-            "content_f1": content_f1,
-            "temporal_precision": temporal_precision,
-            "temporal_recall": temporal_recall,
-            "temporal_f1": temporal_f1,
-            }
-''' 
 
 class AtomicFactsJudge(BaseModel):
     """
@@ -325,3 +286,4 @@ class AtomicFactsJudge(BaseModel):
             "recall": recall,
             "f1": f1,
         }
+'''
