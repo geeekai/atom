@@ -2,6 +2,15 @@
 
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/logo_atom_white.png" width="300">
+    <source media="(prefers-color-scheme: light)" srcset="./docs/logo_atom_black.png" width="300">
+    <img alt="Logo" src="./docs/logo_atom_white.png" width="300">
+  </picture>
+</p>
+
+
 A few-shot and scalable approach for building and continuously updating Temporal Knowledge Graphs (TKGs) from unstructured texts.
 
 ## Overview
